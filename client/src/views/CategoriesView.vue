@@ -3,11 +3,10 @@
 
     <div class="flex items-center justify-between">
       <p class="text-sm text-slate-500 dark:text-slate-400">
-        {{ store.categories.length }}
-        {{ store.categories.length === 1 ? 'category' : 'categories' }}
+        {{ store.catPagination.total }}
+        {{ store.catPagination.total === 1 ? 'category' : 'categories' }}
       </p>
       <div class="flex items-center gap-2">
-        <!-- View toggle — h-8 matches btn-sm height -->
         <div class="flex h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
           <button
             @click="view = 'grid'"
@@ -76,7 +75,23 @@
               {{ cat.name.charAt(0).toUpperCase() }}
             </div>
             <div class="min-w-0">
-              <p class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{{ cat.name }}</p>
+              <input
+                v-if="isEditing(`cat-name-${cat.id}`)"
+                :ref="setInputRef"
+                v-model="editValue"
+                @keydown.enter.prevent="saveEdit(`cat-name-${cat.id}`, cat.name, newName => store.patchCategoryName(cat.id, newName))"
+                @keydown.escape.prevent="cancelEdit"
+                @blur="saveEdit(`cat-name-${cat.id}`, cat.name, newName => store.patchCategoryName(cat.id, newName))"
+                class="w-full text-sm font-medium rounded border border-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              />
+              <p
+                v-else
+                @dblclick="startEdit(`cat-name-${cat.id}`, cat.name)"
+                class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate cursor-pointer"
+                title="Double click to edit category name"
+              >
+                {{ cat.name }}
+              </p>
               <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                 {{ cat.tasks_count || 0 }}
                 {{ cat.tasks_count === 1 ? 'task' : 'tasks' }}
@@ -117,11 +132,9 @@
             :key="cat.id"
             class="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
           >
-            <!-- # -->
             <td class="px-4 py-3 text-xs text-slate-400 dark:text-slate-500 tabular-nums">
-              {{ idx + 1 }}
+              {{ (currentPage - 1) * store.catPagination.per_page + idx + 1 }}
             </td>
-            <!-- Name -->
             <td class="px-4 py-3">
               <div class="flex items-center gap-3">
                 <div
@@ -130,23 +143,36 @@
                 >
                   {{ cat.name.charAt(0).toUpperCase() }}
                 </div>
-                <span class="font-medium text-slate-800 dark:text-slate-200">{{ cat.name }}</span>
+                <input
+                  v-if="isEditing(`cat-name-table-${cat.id}`)"
+                  :ref="setInputRef"
+                  v-model="editValue"
+                  @keydown.enter.prevent="saveEdit(`cat-name-table-${cat.id}`, cat.name, newName => store.patchCategoryName(cat.id, newName))"
+                  @keydown.escape.prevent="cancelEdit"
+                  @blur="saveEdit(`cat-name-table-${cat.id}`, cat.name, newName => store.patchCategoryName(cat.id, newName))"
+                  class="px-2 py-0.5 text-sm font-medium rounded border border-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+                <span
+                  v-else
+                  @dblclick="startEdit(`cat-name-table-${cat.id}`, cat.name)"
+                  class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer"
+                  title="Double click to edit category name"
+                >
+                  {{ cat.name }}
+                </span>
               </div>
             </td>
-            <!-- Color -->
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <span class="h-4 w-4 rounded-full border border-black/10 dark:border-white/10 shrink-0" :style="{ background: cat.color }" />
                 <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{{ cat.color }}</span>
               </div>
             </td>
-            <!-- Tasks count -->
             <td class="px-4 py-3 text-right">
               <span class="inline-flex items-center justify-center min-w-[2rem] rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300 tabular-nums">
                 {{ cat.tasks_count || 0 }}
               </span>
             </td>
-            <!-- Actions -->
             <td class="px-4 py-3">
               <div class="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
@@ -170,6 +196,33 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- ── Pagination ─────────────────────────────────────────────── -->
+    <div
+      v-if="store.catPagination.last_page > 1"
+      class="flex items-center justify-between pt-2"
+    >
+      <p class="text-xs text-slate-400 dark:text-slate-500">
+        Page {{ store.catPagination.current_page }} of {{ store.catPagination.last_page }}
+        · {{ store.catPagination.total }} total
+      </p>
+      <div class="flex gap-1">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="btn-secondary btn-sm px-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Prev
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === store.catPagination.last_page"
+          class="btn-secondary btn-sm px-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next
+        </button>
+      </div>
     </div>
 
     <!-- ── Create / Edit Modal ───────────────────────────────────── -->
@@ -249,7 +302,6 @@
               </div>
             </div>
 
-            <!-- Preview -->
             <div class="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 px-3 py-2.5">
               <div
                 class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white transition-colors"
@@ -317,15 +369,18 @@ import type { Category } from '../stores/tasks'
 import { useToast } from '../composables/useToast'
 import { CATEGORY_COLORS } from '../constants'
 import { Plus, Tag, Pencil, Trash2, X, AlertCircle, Loader2, LayoutGrid, List } from '@lucide/vue'
+import { useInlineEdit } from '../composables/useInlineEdit'
 
 const store = useTaskStore()
 const toast = useToast()
+const { editValue, isEditing, startEdit, cancelEdit, saveEdit, setInputRef } = useInlineEdit()
 
 const view = ref<'grid' | 'table'>('grid')
 const showModal = ref(false)
 const saving = ref(false)
 const editing = ref<Category | null>(null)
 const deleteTarget = ref<Category | null>(null)
+const currentPage = ref(1)
 
 const form = reactive({ name: '', color: '#6366f1' })
 const touched = reactive<Record<string, boolean>>({})
@@ -384,8 +439,9 @@ async function saveCategory() {
       toast.success('Category created')
     }
     closeForm()
-  } catch (err: any) {
-    const msg = err?.response?.data?.message
+  } catch (err: unknown) {
+    const apiErr = err as { response?: { data?: { message?: string } } }
+    const msg = apiErr?.response?.data?.message
     if (msg) errors.name = msg
     else toast.error('Something went wrong. Try again.')
   } finally {
@@ -404,5 +460,10 @@ async function confirmDelete() {
   deleteTarget.value = null
 }
 
-onMounted(() => store.fetchCategories())
+function goToPage(page: number) {
+  currentPage.value = page
+  store.fetchCategories(page)
+}
+
+onMounted(() => store.fetchCategories(1))
 </script>

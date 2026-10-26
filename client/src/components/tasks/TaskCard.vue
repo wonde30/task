@@ -16,11 +16,23 @@
         >
           <Check v-if="task.status === 'completed'" class="h-2.5 w-2.5 text-white" :stroke-width="3" aria-hidden="true" />
         </button>
+        <input
+          v-if="isEditing(`task-title-${task.id}`)"
+          :ref="setInputRef"
+          v-model="editValue"
+          @keydown.enter.prevent="saveEdit(`task-title-${task.id}`, task.title, newTitle => taskStore.patchTaskTitle(task.id, newTitle))"
+          @keydown.escape.prevent="cancelEdit"
+          @blur="saveEdit(`task-title-${task.id}`, task.title, newTitle => taskStore.patchTaskTitle(task.id, newTitle))"
+          class="w-full text-sm font-medium leading-snug rounded border border-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+        />
         <p
-          class="text-sm font-medium leading-snug"
+          v-else
+          @dblclick="startEdit(`task-title-${task.id}`, task.title)"
+          class="text-sm font-medium leading-snug cursor-pointer"
           :class="task.status === 'completed'
             ? 'line-through text-slate-400 dark:text-slate-500'
             : 'text-slate-800 dark:text-slate-200'"
+          title="Double click to edit title"
         >{{ task.title }}</p>
       </div>
       <TaskActionsDropdown
@@ -46,10 +58,26 @@
     </div>
 
     <div class="flex items-center justify-between pl-[26px] mt-auto pt-2 border-t border-slate-100 dark:border-slate-700">
-      <span v-if="task.category" class="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-        <span class="h-1.5 w-1.5 rounded-full shrink-0" :style="{ background: task.category.color }" aria-hidden="true" />
-        {{ task.category.name }}
-      </span>
+      <template v-if="task.category">
+        <input
+          v-if="isEditing(`task-category-${task.id}`)"
+          :ref="setInputRef"
+          v-model="editValue"
+          @keydown.enter.prevent="saveEdit(`task-category-${task.id}`, task.category.name, newName => taskStore.patchCategoryName(task.category!.id, newName))"
+          @keydown.escape.prevent="cancelEdit"
+          @blur="saveEdit(`task-category-${task.id}`, task.category.name, newName => taskStore.patchCategoryName(task.category!.id, newName))"
+          class="text-xs font-medium rounded border border-indigo-500 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+        />
+        <span
+          v-else
+          @dblclick="startEdit(`task-category-${task.id}`, task.category.name)"
+          class="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer"
+          title="Double click to edit category name"
+        >
+          <span class="h-1.5 w-1.5 rounded-full shrink-0" :style="{ background: task.category.color }" aria-hidden="true" />
+          {{ task.category.name }}
+        </span>
+      </template>
       <span v-else class="text-xs text-slate-300 dark:text-slate-600" aria-label="No category">—</span>
 
       <span
@@ -68,9 +96,10 @@
 import { computed } from 'vue'
 import { Check, CalendarDays } from '@lucide/vue'
 import TaskActionsDropdown from './TaskActionsDropdown.vue'
-import type { Task } from '../../stores/tasks'
+import { useTaskStore, type Task } from '../../stores/tasks'
 import { isOverdue, priorityBadge, statusBadge } from '../../composables/useTaskStatus'
 import { formatDate, formatStatus } from '../../utils/format'
+import { useInlineEdit } from '../../composables/useInlineEdit'
 
 const props = defineProps<{ task: Task }>()
 
@@ -80,6 +109,9 @@ const emit = defineEmits<{
   'toggle-complete': [task: Task]
   delete: [task: Task]
 }>()
+
+const taskStore = useTaskStore()
+const { editValue, isEditing, startEdit, cancelEdit, saveEdit, setInputRef } = useInlineEdit()
 
 const cardAriaLabel = computed(() => {
   const overdue = isOverdue(props.task) ? ', overdue' : ''

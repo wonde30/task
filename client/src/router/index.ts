@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth'
 const routes = [
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
   { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue') },
+  { path: '/auth/callback', name: 'auth-callback', component: () => import('../views/AuthCallback.vue') },
   {
     path: '/',
     component: () => import('../components/AppLayout.vue'),
@@ -20,13 +21,19 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
-let userFetchPromise: Promise<void> | null = null
+let userFetchPromise: Promise<unknown> | null = null
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   const token = localStorage.getItem('token')
 
-  if (to.name === 'login' || to.name === 'register') {
+  if (to.name === 'auth-callback') {
+    return
+  }
+
+  const isGuestRoute = to.name === 'login' || to.name === 'register'
+
+  if (isGuestRoute) {
     if (token) return { name: 'dashboard' }
     return
   }
@@ -38,20 +45,17 @@ router.beforeEach(async (to) => {
   if (auth.user) return
 
   if (!userFetchPromise) {
-    userFetchPromise = auth.fetchUser().catch((err) => {
-      auth.logout()
-      userFetchPromise = null
-      throw err
-    }).finally(() => {
+    userFetchPromise = auth.loadUser().finally(() => {
       userFetchPromise = null
     })
   }
 
-  try {
-    await userFetchPromise
-  } catch {
+  await userFetchPromise
+
+  if (!auth.user) {
     return { name: 'login' }
   }
 })
 
 export default router
+

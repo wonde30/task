@@ -11,8 +11,31 @@
       </div>
 
       <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-7 shadow-sm">
-        <form @submit.prevent="handleLogin" novalidate class="space-y-5">
+        <!-- Google Auth Button -->
+        <button
+          @click="handleGoogleLogin"
+          type="button"
+          class="w-full inline-flex items-center justify-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700/50 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+        >
+          <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          <span>Continue with Google</span>
+        </button>
 
+        <div class="my-6 relative flex items-center">
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+          <span class="mx-4 text-xs font-medium text-slate-400 dark:text-slate-500">
+            or continue with email
+          </span>
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+        </div>
+
+        <form @submit.prevent="handleLogin" novalidate class="space-y-5">
+          <!-- Email -->
           <div>
             <label for="email" class="label">Email <span class="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
             <input
@@ -38,6 +61,7 @@
             </p>
           </div>
 
+          <!-- Password -->
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label for="password" class="label mb-0">Password <span class="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
@@ -75,6 +99,7 @@
             </p>
           </div>
 
+          <!-- Remember me -->
           <label class="flex items-center gap-2.5 cursor-pointer">
             <input
               type="checkbox"
@@ -84,6 +109,7 @@
             <span class="text-sm text-slate-600 dark:text-slate-300">Remember me</span>
           </label>
 
+          <!-- API error -->
           <Transition name="fade">
             <div v-if="apiError" class="flex items-center gap-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-100 dark:border-rose-800/60 px-3.5 py-3">
               <AlertCircle class="h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" />
@@ -91,11 +117,11 @@
             </div>
           </Transition>
 
-          <button type="submit" :disabled="loading" class="btn-primary w-full">
-            <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-            {{ loading ? 'Signing in…' : 'Sign in' }}
+          <!-- Sign in button -->
+          <button type="submit" :disabled="auth.loading" class="btn-primary w-full">
+            <Loader2 v-if="auth.loading" class="h-4 w-4 animate-spin" />
+            {{ auth.loading ? 'Signing in…' : 'Sign in' }}
           </button>
-
         </form>
       </div>
 
@@ -114,7 +140,8 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToast } from '../composables/useToast'
-import { CheckSquare, Eye, EyeOff, Loader2, AlertCircle } from '@lucide/vue'
+import { CheckSquare, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-vue-next'
+import type { AxiosError } from 'axios'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -125,7 +152,6 @@ const touched  = reactive<Record<string, boolean>>({})
 const errors   = reactive<Record<string, string>>({})
 const apiError = ref('')
 const showPass = ref(false)
-const loading  = ref(false)
 
 function touch(field: string) {
   touched[field] = true
@@ -152,16 +178,18 @@ async function handleLogin() {
   touched.password = true
   if (!validateEmail() || !validatePassword()) return
 
-  loading.value  = true
   apiError.value = ''
   try {
     await auth.login(form)
     toast.success('Welcome back!')
-    router.push({ name: 'dashboard' })
-  } catch (e: any) {
-    apiError.value = e.response?.data?.message ?? 'Incorrect email or password'
-  } finally {
-    loading.value = false
+    await router.push({ name: 'dashboard' })
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>
+    apiError.value = error.response?.data?.message ?? 'Incorrect email or password'
   }
 }
-</script>
+
+function handleGoogleLogin() {
+  auth.loginWithGoogle()
+}
+</script>

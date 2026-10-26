@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-screen overflow-hidden bg-white dark:bg-slate-900">
+  <div class="flex h-screen bg-white dark:bg-slate-900">
 
     <Transition name="fade">
       <div
@@ -11,7 +11,7 @@
     </Transition>
 
     <aside
-      class="fixed inset-y-0 left-0 z-sidebar flex w-64 flex-col bg-white border-r border-slate-200/80 transition-transform duration-250 ease-in-out lg:static lg:translate-x-0 dark:bg-slate-900 dark:border-slate-800"
+    class="fixed inset-y-0 left-0 z-sidebar flex w-64 flex-col bg-white border-r border-slate-200/80 transition-transform duration-250 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 dark:bg-slate-900 dark:border-slate-800"
       :class="mobileOpen ? 'translate-x-0' : '-translate-x-full'"
       :inert="!mobileOpen && isMobileViewport ? true : undefined"
       aria-label="Application sidebar"
@@ -158,7 +158,7 @@
       </div>
     </aside>
 
-    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <div class="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
 
       <header
         class="flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 sm:px-6 lg:px-8 dark:border-slate-800"
@@ -192,13 +192,13 @@
 
       <main
         id="main-content"
-        class="flex-1 overflow-y-auto bg-slate-50/70 dark:bg-slate-950"
+        class="flex-1 min-h-0 overflow-y-auto bg-slate-50/70 dark:bg-slate-950"
         :aria-label="pageTitle"
       >
         <div
           class="mx-auto"
           :class="isProfileRoute
-            ? 'max-w-3xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 min-h-[calc(100vh-4rem)]'
+            ? 'max-w-3xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 '
             : 'max-w-[1400px] px-4 sm:px-6 lg:px-8 py-6 sm:py-8'"
         >
           <router-view />
@@ -326,22 +326,20 @@
                   <div class="h-px bg-slate-100 dark:bg-slate-800" role="separator" />
 
                   <div class="px-6 py-4 space-y-4">
-                    <fieldset>
-                      <legend class="label mb-2">Priority</legend>
-                      <div class="grid grid-cols-4 gap-2" role="group">
-                        <button
-                          v-for="p in PRIORITIES"
-                          :key="p.value"
-                          type="button"
-                          @click="gForm.priority = p.value"
-                          class="rounded-xl border px-2 py-2 text-xs font-semibold transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 cursor-pointer"
-                          :class="gForm.priority === p.value
-                            ? p.activeClass
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200'"
-                          :aria-pressed="gForm.priority === p.value"
-                        >{{ p.label }}</button>
-                      </div>
-                    </fieldset>
+                    <div class="w-full">
+                      <label class="label mb-2 block">Priority</label>
+                      <select
+                      v-model="gForm.priority"
+                      class="input"
+                      >
+                      <option
+                      v-for="p in PRIORITIES"
+                      :key="p.value"
+                      :value="p.value"
+                      >{{ p.label }}
+                    </option>
+                  </select>
+                </div>
 
                     <div>
                       <label class="label" for="g-task-category">Category</label>
@@ -640,7 +638,31 @@ function gValidate(field: string): boolean {
   }
   return !gErrors[field]
 }
+async function saveNewTask() {
+  gTouched.title = true
+  gValidate('title')
+  if (gForm.end_date) { gTouched.end_date = true; gValidate('end_date') }
+  if (Object.keys(gErrors).length) return
 
+  gSaving.value = true
+  try {
+    await taskStore.createTask({
+      title: gForm.title.trim(),
+      description: gForm.description?.trim() || null,
+      priority: gForm.priority,
+      start_date: gForm.start_date || null,
+      end_date: gForm.end_date || null,
+      category_id: gForm.category_id ?? null,
+    })
+    toast.success('Task created')
+    newTask.close()
+  } catch (err: unknown) {
+    const apiErr = err as { response?: { data?: { message?: string } } }
+    toast.error(apiErr?.response?.data?.message ?? 'Failed to create task')
+  } finally {
+    gSaving.value = false
+  }
+}
 watch(newTask.show, async (open) => {
   if (open) {
     Object.assign(gForm, { title: '', description: '', priority: 'medium', start_date: '', end_date: '', category_id: null })
@@ -655,26 +677,6 @@ watch(newTask.show, async (open) => {
     newTaskTrigger.value?.focus()
   }
 })
-
-async function saveNewTask() {
-  gTouched.title = true
-  if (!gValidate('title')) {
-    await nextTick()
-    modalFirstInput.value?.focus()
-    return
-  }
-  gSaving.value = true
-  try {
-    await taskStore.createTask({ ...gForm, status: 'pending', category_id: gForm.category_id || null })
-    toast.success('Task created')
-    newTask.close()
-    if (route.path === '/tasks') taskStore.fetchTasks()
-  } catch {
-    toast.error('Could not create task. Please try again.')
-  } finally {
-    gSaving.value = false
-  }
-}
 
 onMounted(() => {
   document.addEventListener('click', onClickOutsideAppearance)

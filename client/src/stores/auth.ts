@@ -1,66 +1,163 @@
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import api from '../utils/api'
+import api from '@/utils/api'
 
-interface User {
+export interface User {
   id: number
   name: string
   email: string
   created_at: string
 }
 
+export interface AuthPayload {
+  user: User
+  token: string
+}
+
+export interface LoginInput {
+  email: string
+  password: string
+}
+
+export interface RegisterInput {
+  name: string
+  email: string
+  password: string
+  password_confirmation: string
+}
+
+export interface ProfileInput {
+  name: string
+  email: string
+}
+
+export interface PasswordInput {
+  current_password: string
+  password: string
+  password_confirmation: string
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
+  const loading = ref(false)
 
-  const login = async (credentials: { email: string; password: string }) => {
-    const { data } = await api.post('/login', credentials)
-    user.value = data.data.user
-    localStorage.setItem('token', data.data.token)
-    return data.data
+  const authenticated = computed(() => Boolean(user.value))
+
+  function setUser(value: User | null) {
+    user.value = value
   }
 
-  const register = async (userData: {
-    name: string
-    email: string
-    password: string
-    password_confirmation: string
-  }) => {
-    const { data } = await api.post('/register', userData)
-    user.value = data.data.user
-    localStorage.setItem('token', data.data.token)
-    return data.data
-  }
-
-  const fetchUser = async () => {
-    const { data } = await api.get('/user')
-    user.value = data.data
-  }
-
-  const updateProfile = async (profileData: { name: string; email: string }) => {
-    const { data } = await api.put('/profile', profileData)
-    if (user.value) {
-      user.value = { ...user.value, ...data.data }
-    } else {
-      user.value = data.data
+  function setToken(token: string) {
+    if (!token || token === 'undefined' || token === 'null') {
+      clearSession()
+      return
     }
-    return data.data
+    localStorage.setItem('token', token)
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
   }
 
-  const changePassword = async (passwordData: {
-    current_password: string
-    password: string
-    password_confirmation: string
-  }) => {
-    const { data } = await api.put('/password', passwordData)
-    if (data.data?.token) localStorage.setItem('token', data.data.token)
-    return data.data
-  }
-
-  const logout = () => {
-    api.post('/logout').catch(() => {})
+  function clearSession() {
     user.value = null
     localStorage.removeItem('token')
+    delete api.defaults.headers.common['Authorization']
   }
 
-  return { user, login, register, fetchUser, updateProfile, changePassword, logout }
-})
+  function loginWithGoogle() {
+    window.location.href = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/auth/google`
+  }
+
+  async function login(payload: LoginInput): Promise<AuthPayload> {
+    loading.value = true
+    try {
+      const { data } = await api.post<{ success?: boolean; data?: AuthPayload; user?: User; token?: string }>('/login', payload)
+      const authData = (data.data && data.data.token ? data.data : data) as AuthPayload
+      setToken(authData.token)
+      setUser(authData.user)
+      return authData
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function register(payload: RegisterInput): Promise<AuthPayload> {
+    loading.value = true
+    try {
+      const { data } = await api.post<{ success?: boolean; data?: AuthPayload; user?: User; token?: string }>('/register', payload)
+      const authData = (data.data && data.data.token ? data.data : data) as AuthPayload
+      setToken(authData.token)
+      setUser(authData.user)
+      return authData
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadUser(): Promise<User | null> {
+    const token = localStorage.getItem('token')
+    if (!token || token === 'undefined' || token === 'null') {
+      clearSession()
+      return null
+    }
+
+    try {
+      const { data } = await api.get<{ success?: boolean; data?: User }>('/user')
+      const responseData = data as unknown as { data?: User; id?: number; email?: string }
+      const fetchedUser = (responseData.data && responseData.data.id ? responseData.data : responseData) as User
+
+      if (!fetchedUser || !fetchedUser.id) {
+        clearSession()
+        return null
+      }
+
+      setUser(fetchedUser)
+      return fetchedUser
+    } catch {
+      clearSession()
+      return null
+    }
+  }
+
+  async function updateProfile(payload: ProfileInput): Promise<User> {
+    const { data } = await api.put<{ success?: boolean; data?: User }>('/profile', payload)
+    const responseData = data as unknown as { data?: User; id?: number }
+    const updatedUser = (responseData.data && responseData.data.id ? responseData.data : responseData) as User
+    setUser(updatedUser)
+    return updatedUser
+  }
+
+  async function changePassword(payload: PasswordInput): Promise<unknown> {
+    const { data } = await api.put<{ success?: boolean; data?: { token: string } }>('/password', payload)
+    const responseData = data as unknown as { data?: { token: string }; token?: string }
+    const res = responseData.data && responseData.data.token ? responseData.data : responseData
+    if (res.token) {
+      setToken(res.token)
+    }
+    return data
+  }
+
+  async function logout(): Promise<void> {
+    try {
+      await api.post('/logout')
+    } finally {
+      clearSession()
+    }
+  }
+
+  return {
+    user,
+    loading,
+    authenticated,
+
+    setUser,
+    setToken,
+    clearSession,
+
+    loginWithGoogle,
+    login,
+    register,
+    loadUser,
+    updateProfile,
+    changePassword,
+    logout,
+  }
+})

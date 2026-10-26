@@ -12,10 +12,11 @@ class CategoryController extends Controller
 
     public function index(Request $request)
     {
+        $perpage = min((int) $request->query('perpage', 10), 50);
         $categories = Category::where('user_id', $request->user()->id)
             ->withCount('tasks')
             ->orderBy('name')
-            ->get();
+            ->paginate($perpage);
 
         return $this->ok($categories);
     }

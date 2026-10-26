@@ -274,7 +274,7 @@ import {
   Loader2, LogOut, AlertCircle, Eye, EyeOff,
   User, Lock, KeyRound, Save, CheckCircle2,
   CalendarDays,
-} from '@lucide/vue'
+} from 'lucide-vue-next'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -402,6 +402,8 @@ async function changePassword() {
   try {
     await auth.changePassword(password)
     toast.success('Password updated — please sign in again')
+    await auth.logout()
+    router.push({ name: 'login' })
     password.current_password = ''
     password.password = ''
     password.password_confirmation = ''
@@ -416,8 +418,8 @@ async function changePassword() {
   }
 }
 
-function performLogout() {
-  auth.logout()
+async function performLogout() {
+  await auth.logout()
   toast.success('Signed out')
   showSignOutModal.value = false
   router.push({ name: 'login' })

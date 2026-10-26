@@ -128,9 +128,21 @@
                 </button>
 
                 <div class="min-w-0 flex-1">
+                  <input
+                    v-if="isEditing(`task-title-${task.id}`)"
+                    :ref="setInputRef"
+                    v-model="editValue"
+                    @keydown.enter.prevent="saveEdit(`task-title-${task.id}`, task.title, newTitle => taskStore.patchTaskTitle(task.id, newTitle))"
+                    @keydown.escape.prevent="cancelEdit"
+                    @blur="saveEdit(`task-title-${task.id}`, task.title, newTitle => taskStore.patchTaskTitle(task.id, newTitle))"
+                    class="w-full max-w-[280px] sm:max-w-[420px] px-2 py-0.5 text-[15px] font-semibold rounded border border-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
                   <p
-                    class="text-[15px] font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate max-w-[280px] sm:max-w-[420px]"
+                    v-else
+                    @dblclick="startEdit(`task-title-${task.id}`, task.title)"
+                    class="text-[15px] font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate max-w-[280px] sm:max-w-[420px] cursor-pointer"
                     :class="{ 'line-through !text-slate-400 dark:!text-slate-500 font-normal': task.status === 'completed' }"
+                    title="Double click to edit title"
                   >
                     {{ task.title }}
                   </p>
@@ -161,17 +173,30 @@
 
             <!-- Category -->
             <td class="px-4 py-3.5 align-middle whitespace-nowrap">
-              <span
-                v-if="task.category"
-                class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-xs font-medium text-slate-700 dark:text-slate-300 shadow-2xs"
-              >
-                <span
-                  class="h-2 w-2 rounded-full shrink-0 ring-2 ring-white dark:ring-slate-900"
-                  :style="{ background: task.category.color }"
-                  aria-hidden="true"
+              <template v-if="task.category">
+                <input
+                  v-if="isEditing(`task-category-${task.id}`)"
+                  :ref="setInputRef"
+                  v-model="editValue"
+                  @keydown.enter.prevent="saveEdit(`task-category-${task.id}`, task.category.name, newName => taskStore.patchCategoryName(task.category!.id, newName))"
+                  @keydown.escape.prevent="cancelEdit"
+                  @blur="saveEdit(`task-category-${task.id}`, task.category.name, newName => taskStore.patchCategoryName(task.category!.id, newName))"
+                  class="px-2 py-0.5 text-xs font-medium rounded border border-indigo-500 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
-                {{ task.category.name }}
-              </span>
+                <span
+                  v-else
+                  @dblclick="startEdit(`task-category-${task.id}`, task.category.name)"
+                  class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-xs font-medium text-slate-700 dark:text-slate-300 shadow-2xs cursor-pointer"
+                  title="Double click to edit category name"
+                >
+                  <span
+                    class="h-2 w-2 rounded-full shrink-0 ring-2 ring-white dark:ring-slate-900"
+                    :style="{ background: task.category.color }"
+                    aria-hidden="true"
+                  />
+                  {{ task.category.name }}
+                </span>
+              </template>
               <span v-else class="text-xs text-slate-300 dark:text-slate-600" aria-label="No category">—</span>
             </td>
 
@@ -257,9 +282,10 @@
 import { defineComponent, h } from 'vue'
 import { Check, ClipboardList, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Calendar, AlertCircle } from '@lucide/vue'
 import TaskActionsDropdown from './TaskActionsDropdown.vue'
-import type { Task } from '../../stores/tasks'
+import { useTaskStore, type Task } from '../../stores/tasks'
 import { isOverdue } from '../../composables/useTaskStatus'
 import { formatDate } from '../../utils/format'
+import { useInlineEdit } from '../../composables/useInlineEdit'
 
 export type { Task }
 
@@ -283,6 +309,9 @@ const emit = defineEmits<{
   delete: [task: Task]
   page: [page: number]
 }>()
+
+const taskStore = useTaskStore()
+const { editValue, isEditing, startEdit, cancelEdit, saveEdit, setInputRef } = useInlineEdit()
 
 const SortIcon = defineComponent({
   props: { field: String, current: String, dir: String },
@@ -333,4 +362,3 @@ function getStatusDotClass(status: string) {
   }
 }
 </script>
-

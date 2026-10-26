@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import api from '../utils/api'
+import { useToast } from '../composables/useToast'
 
 export interface Task {
   id: number
@@ -39,8 +40,10 @@ interface Pagination {
   total: number
   per_page: number
 }
+const catPagination = ref<Pagination>({ current_page: 1, last_page: 1, total: 0, per_page: 10 })
 
 export const useTaskStore = defineStore('tasks', () => {
+  const toast = useToast()
   const tasks = ref<Task[]>([])
   const categories = ref<Category[]>([])
   const pagination = ref<Pagination>({ current_page: 1, last_page: 1, total: 0, per_page: 10 })
@@ -79,8 +82,9 @@ export const useTaskStore = defineStore('tasks', () => {
         total: data.data.total,
         per_page: data.data.per_page,
       }
-    } catch (err: any) {
-      error.value = err?.response?.data?.message ?? 'Failed to load tasks'
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { message?: string } } }
+      error.value = apiErr?.response?.data?.message ?? 'Failed to load tasks'
     } finally {
       loading.value = false
     }
@@ -100,6 +104,26 @@ export const useTaskStore = defineStore('tasks', () => {
     return data
   }
 
+  const patchTaskTitle = async (id: number, title: string) => {
+    const targetTask = tasks.value.find(t => t.id === id)
+    if (!targetTask) return
+
+    const previousTitle = targetTask.title
+    targetTask.title = title
+
+    try {
+      const { data } = await api.patch(`/tasks/${id}`, { title })
+      const idx = tasks.value.findIndex(t => t.id === id)
+      if (idx !== -1) tasks.value[idx] = data.data
+    } catch (err: unknown) {
+      targetTask.title = previousTitle
+      const apiErr = err as { response?: { data?: { message?: string } } }
+      const msg = apiErr?.response?.data?.message ?? 'Failed to update task title'
+      toast.error(msg)
+      throw err
+    }
+  }
+
   const deleteTask = async (id: number) => {
     await api.delete(`/tasks/${id}`)
     tasks.value = tasks.value.filter(t => t.id !== id)
@@ -113,9 +137,15 @@ export const useTaskStore = defineStore('tasks', () => {
     return data
   }
 
-  const fetchCategories = async () => {
-    const { data } = await api.get('/categories')
-    categories.value = data.data
+  const fetchCategories = async (page = 1, per_page = 10) => {
+    const { data } = await api.get('/categories', { params: { page, per_page } })
+    categories.value = data.data.data ?? data.data
+    catPagination.value = {
+      current_page: data.data.current_page,
+      last_page: data.data.last_page,
+      total: data.data.total,
+      per_page: data.data.per_page,
+    }
   }
 
   const createCategory = async (catData: { name: string; color: string }) => {
@@ -129,6 +159,37 @@ export const useTaskStore = defineStore('tasks', () => {
     const idx = categories.value.findIndex(c => c.id === id)
     if (idx !== -1) categories.value[idx] = data.data
     return data
+  }
+
+  const patchCategoryName = async (id: number, name: string) => {
+    const targetCat = categories.value.find(c => c.id === id)
+    if (!targetCat) return
+
+    const previousName = targetCat.name
+    targetCat.name = name
+
+    tasks.value.forEach(t => {
+      if (t.category && t.category.id === id) {
+        t.category.name = name
+      }
+    })
+
+    try {
+      const { data } = await api.patch(`/categories/${id}`, { name })
+      const idx = categories.value.findIndex(c => c.id === id)
+      if (idx !== -1) categories.value[idx] = data.data
+    } catch (err: unknown) {
+      targetCat.name = previousName
+      tasks.value.forEach(t => {
+        if (t.category && t.category.id === id) {
+          t.category.name = previousName
+        }
+      })
+      const apiErr = err as { response?: { data?: { message?: string } } }
+      const msg = apiErr?.response?.data?.message ?? 'Failed to update category name'
+      toast.error(msg)
+      throw err
+    }
   }
 
   const deleteCategory = async (id: number) => {
@@ -155,6 +216,7 @@ export const useTaskStore = defineStore('tasks', () => {
   return {
     tasks,
     categories,
+    catPagination,
     pagination,
     loading,
     error,
@@ -162,12 +224,14 @@ export const useTaskStore = defineStore('tasks', () => {
     fetchTasks,
     createTask,
     updateTask,
+    patchTaskTitle,
     deleteTask,
     updateStatus,
     duplicateTask,
     fetchCategories,
     createCategory,
     updateCategory,
+    patchCategoryName,
     deleteCategory,
   }
 })

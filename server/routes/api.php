@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\DashboardController;
@@ -9,6 +10,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+Route::get('/auth/{provider}', [SocialAuthController::class, 'redirect'])->where('provider', 'google|facebook');
+Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])->where('provider', 'google|facebook');
+Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])->where('provider', 'google|facebook');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
